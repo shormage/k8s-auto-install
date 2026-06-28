@@ -1,0 +1,257 @@
+#!/bin/bash
+set -euo pipefail
+
+# ============================================================
+# R_SH Kubernetes Installer v2.0
+# Main Menu
+# ============================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ============================================================
+# Required Files Check
+# ============================================================
+
+REQUIRED_FILES=(
+  "config.env"
+  "common.sh"
+  "install.sh"
+  "health.sh"
+  "reset.sh"
+)
+
+for file in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "${SCRIPT_DIR}/${file}" ]; then
+    echo "ERROR: Required file not found: ${file}"
+    echo "Please make sure all files are in the same directory."
+    exit 1
+  fi
+done
+
+# ============================================================
+# Load Modules
+# ============================================================
+
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/common.sh"
+
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/install.sh"
+
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/health.sh"
+
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/reset.sh"
+
+# ============================================================
+# Classic Display Helpers
+# ============================================================
+
+show_banner() {
+  clear_screen
+  line
+  echo "          ${APP_NAME}"
+  echo "        Version ${APP_VERSION}"
+  line
+  echo
+  echo "Hostname : $(hostname)"
+  echo "OS       : $(. /etc/os-release && echo "$PRETTY_NAME")"
+  echo "IP       : $(hostname -I | awk '{print $1}')"
+  echo "CPU      : $(nproc) Core"
+  echo "Memory   : $(free -h | awk '/Mem:/ {print $2}')"
+  echo "Disk     : $(df -h / | awk 'NR==2 {print $2 " total / " $4 " free"}')"
+  echo
+}
+
+show_main_header() {
+  clear_screen
+  echo "================================================="
+  echo "        R_SH Kubernetes Installer"
+  echo "        Last updated: 2026-06 | 1405-04"
+  echo "================================================="
+  echo
+}
+
+select_installation_mode() {
+  while true; do
+    clear_screen
+    echo "================================================="
+    echo "         R_SH Kubernetes Installer"
+    echo "================================================="
+    echo
+    echo "Installation Mode"
+    echo
+    echo "1) Offline First    (Latest update 2026-06)"
+    echo "2) Online           (You should use VPN.)"
+    echo
+
+    read -rp "Choice : " mode_choice
+
+    case "$mode_choice" in
+      1)
+        INSTALL_MODE="offline"
+        return
+        ;;
+      2)
+        INSTALL_MODE="online"
+        return
+        ;;
+      *)
+        echo "Invalid option"
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+# ============================================================
+# Initial Directories
+# ============================================================
+
+init_project_dirs() {
+  mkdir -p "${SCRIPT_DIR}/logs"
+  mkdir -p "${SCRIPT_DIR}/packages/v1.34"
+  mkdir -p "${SCRIPT_DIR}/packages/v1.35"
+}
+
+bootstrap_offline_archives() {
+  local packages_archive="${SCRIPT_DIR}/rsh-packages.tar.gz"
+  local image_bundle="${SCRIPT_DIR}/k8s-v1.34-offline.tar.gz"
+  local image_bundle_target="${SCRIPT_DIR}/packages/v1.34/k8s-v1.34-offline.tar.gz"
+
+  if [ -f "$packages_archive" ]; then
+    tar -xzf "$packages_archive" -C "$SCRIPT_DIR"
+  fi
+
+  if [ -f "$image_bundle" ]; then
+    mkdir -p "${SCRIPT_DIR}/packages/v1.34"
+    cp -f "$image_bundle" "$image_bundle_target"
+  fi
+}
+
+# ============================================================
+# Offline Verify Menu
+# ============================================================
+
+verify_offline_packages_menu() {
+  show_banner
+
+  # Reset selected version so user chooses again every time
+  K8S_VERSION=""
+  INSTALL_MODE=""
+  PACKAGE_DIR=""
+
+  echo "Verify Offline Packages"
+  echo
+  echo "This option does NOT download anything."
+  echo "It only checks files inside packages/v1.34 or packages/v1.35."
+  echo
+
+  select_k8s_version
+
+  verify_offline_packages || true
+
+  pause
+}
+
+# ============================================================
+# About
+# ============================================================
+
+about_menu() {
+  show_banner
+
+  echo "About"
+  echo
+  echo "Name    : ${APP_NAME}"
+  echo "Version : ${APP_VERSION}"
+  echo
+  echo "Purpose:"
+  echo "  Install Kubernetes cluster with kubeadm."
+  echo
+  echo "Features:"
+  echo "  - Install Master Node"
+  echo "  - Install Worker Node"
+  echo "  - Online / Offline installation mode"
+  echo "  - Kubernetes version selection: v1.34 / v1.35"
+  echo "  - Offline package verification"
+  echo "  - Reset / cleanup"
+  echo "  - Health check"
+  echo
+  echo "Offline package directories:"
+  echo "  packages/v1.34/"
+  echo "  packages/v1.35/"
+  echo
+
+  pause
+}
+
+# ============================================================
+# Main Menu
+# ============================================================
+
+main_menu() {
+  while true; do
+    show_main_header
+
+    echo "Select Installation Type"
+    echo
+    echo "1) Master Node"
+    echo "2) Worker Node"
+    echo "3) Reset / Cleanup"
+    echo "4) Health Check"
+    echo "5) Verify Offline Packages"
+    echo "6) About"
+    echo "7) Exit"
+    echo
+
+    read -rp "Choice : " main_choice
+
+    case "$main_choice" in
+      1)
+        K8S_VERSION=""
+        INSTALL_MODE=""
+        PACKAGE_DIR=""
+        select_installation_mode
+        install_master_node
+        ;;
+      2)
+        K8S_VERSION=""
+        INSTALL_MODE=""
+        PACKAGE_DIR=""
+        select_installation_mode
+        install_worker_node
+        ;;
+      3)
+        reset_menu
+        ;;
+      4)
+        run_health_check
+        ;;
+      5)
+        verify_offline_packages_menu
+        ;;
+      6)
+        about_menu
+        ;;
+      7)
+        echo
+        ok "Goodbye."
+        exit 0
+        ;;
+      *)
+        warn "Invalid option."
+        sleep 1
+        ;;
+    esac
+  done
+}
+
+# ============================================================
+# Start
+# ============================================================
+
+init_project_dirs
+bootstrap_offline_archives
+main_menu

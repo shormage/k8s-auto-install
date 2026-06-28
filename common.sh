@@ -31,6 +31,7 @@ CNI_FILE=""
 K8S_DEBS_FILE=""
 CALICO_FILE=""
 IMAGES_FILE=""
+IMAGES_BUNDLE_FILE=""
 
 LOG_DIR="${SCRIPT_DIR}/${LOGS_DIR}"
 mkdir -p "$LOG_DIR"
@@ -211,11 +212,11 @@ prepare_package_paths() {
   K8S_DEBS_FILE="${PACKAGE_DIR}/kubernetes-${K8S_VERSION}-debs.tar.gz"
   CALICO_FILE="${PACKAGE_DIR}/${CALICO_PACKAGE}"
   IMAGES_FILE="${PACKAGE_DIR}/images-${K8S_VERSION}.tar"
-
+  IMAGES_BUNDLE_FILE="${PACKAGE_DIR}/k8s-${K8S_VERSION}-offline.tar.gz"
   mkdir -p "$PACKAGE_DIR"
 
   export K8S_VERSION INSTALL_MODE PACKAGE_DIR
-  export CONTAINERD_FILE RUNC_FILE CNI_FILE K8S_DEBS_FILE CALICO_FILE IMAGES_FILE
+  export CONTAINERD_FILE RUNC_FILE CNI_FILE K8S_DEBS_FILE CALICO_FILE IMAGES_FILE IMAGES_BUNDLE_FILE
 }
 
 show_selected_paths() {
@@ -270,7 +271,14 @@ verify_offline_packages() {
   verify_file_exists "$CNI_FILE" "$CNI_PACKAGE" || missing=1
   verify_file_exists "$K8S_DEBS_FILE" "kubernetes-${K8S_VERSION}-debs.tar.gz" || missing=1
   verify_file_exists "$CALICO_FILE" "$CALICO_PACKAGE" || missing=1
-  verify_file_exists "$IMAGES_FILE" "images-${K8S_VERSION}.tar" || missing=1
+  if [ -f "$IMAGES_FILE" ]; then
+    ok "images-${K8S_VERSION}.tar"
+  elif [ -f "$IMAGES_BUNDLE_FILE" ]; then
+    ok "k8s-${K8S_VERSION}-offline.tar.gz"
+  else
+    fail "Image archive not found: images-${K8S_VERSION}.tar or k8s-${K8S_VERSION}-offline.tar.gz"
+    missing=1
+  fi
 
   echo
 
