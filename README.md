@@ -6,18 +6,6 @@ chmod +x R_SH
 
 sudo ./R_SH 
 
-# Project Structure
-R_SH/
-├── R_SH
-├── config.env
-├── common.sh
-├── install.sh
-├── health.sh
-├── reset.sh
-├── package.tar.gz ------> ├── packages/
-                           ├── v1.34/
-                           └── v1.35/
-└── logs/
 
 # R_SH Kubernetes Installer v2.0
 
