@@ -1,10 +1,10 @@
 # How to Run 
 
-download package.tar.gz 
+download package.tar.gz.
 
-chmod +x R_SH
+chmod +x R_SH.
 
-sudo ./R_SH
+sudo ./R_SH.
 
 # Project Structure
 R_SH/
@@ -43,13 +43,3 @@ In offline mode, the installer does not use the internet.
 
 All required files must already exist inside the local `packages` directory.
 
-For example:
-
-```text
-packages/
-├── v1.34/
-└── v1.35/
-
-How to Run
-chmod +x R_SH
-sudo ./R_SH
