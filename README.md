@@ -1,7 +1,9 @@
 # How to Run 
 
 download package.tar.gz 
+
 chmod +x R_SH
+
 sudo ./R_SH
 
 # Project Structure
