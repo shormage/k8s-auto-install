@@ -1,0 +1,6 @@
+* text=auto
+
+*.sh text eol=lf
+*.env text eol=lf
+R_SH text eol=lf
+README.md text eol=lf

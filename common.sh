@@ -32,6 +32,7 @@ K8S_DEBS_FILE=""
 CALICO_FILE=""
 IMAGES_FILE=""
 IMAGES_BUNDLE_FILE=""
+K8S_IMAGES_BUNDLE_FILE=""
 
 LOG_DIR="${SCRIPT_DIR}/${LOGS_DIR}"
 mkdir -p "$LOG_DIR"
@@ -213,10 +214,17 @@ prepare_package_paths() {
   CALICO_FILE="${PACKAGE_DIR}/${CALICO_PACKAGE}"
   IMAGES_FILE="${PACKAGE_DIR}/images-${K8S_VERSION}.tar"
   IMAGES_BUNDLE_FILE="${PACKAGE_DIR}/k8s-${K8S_VERSION}-offline.tar.gz"
+  K8S_IMAGES_BUNDLE_FILE=""
+
+  if [ "$K8S_VERSION" = "v1.35" ]; then
+    K8S_IMAGES_BUNDLE_FILE="${PACKAGE_DIR}/k8s-images-v1.35.2.tar.gz"
+  fi
+
   mkdir -p "$PACKAGE_DIR"
 
   export K8S_VERSION INSTALL_MODE PACKAGE_DIR
-  export CONTAINERD_FILE RUNC_FILE CNI_FILE K8S_DEBS_FILE CALICO_FILE IMAGES_FILE IMAGES_BUNDLE_FILE
+  export CONTAINERD_FILE RUNC_FILE CNI_FILE K8S_DEBS_FILE CALICO_FILE
+  export IMAGES_FILE IMAGES_BUNDLE_FILE K8S_IMAGES_BUNDLE_FILE
 }
 
 show_selected_paths() {
@@ -228,6 +236,12 @@ show_selected_paths() {
   echo "K8S Debs   : ${K8S_DEBS_FILE}"
   echo "Calico     : ${CALICO_FILE}"
   echo "Images     : ${IMAGES_FILE}"
+  echo "Bundle     : ${IMAGES_BUNDLE_FILE}"
+
+  if [ -n "${K8S_IMAGES_BUNDLE_FILE:-}" ]; then
+    echo "K8S Bundle : ${K8S_IMAGES_BUNDLE_FILE}"
+  fi
+
   echo
 }
 
@@ -246,6 +260,31 @@ verify_file_exists() {
     fail "$file_name not found"
     return 1
   fi
+}
+
+verify_image_archive_exists() {
+  if [ -f "$IMAGES_FILE" ]; then
+    ok "images-${K8S_VERSION}.tar"
+    return 0
+  fi
+
+  if [ "$K8S_VERSION" = "v1.35" ] && [ -f "$K8S_IMAGES_BUNDLE_FILE" ]; then
+    ok "k8s-images-v1.35.2.tar.gz"
+    return 0
+  fi
+
+  if [ -f "$IMAGES_BUNDLE_FILE" ]; then
+    ok "k8s-${K8S_VERSION}-offline.tar.gz"
+    return 0
+  fi
+
+  if [ "$K8S_VERSION" = "v1.35" ]; then
+    fail "Image archive not found: images-v1.35.tar, k8s-images-v1.35.2.tar.gz, or k8s-v1.35-offline.tar.gz"
+  else
+    fail "Image archive not found: images-v1.34.tar or k8s-v1.34-offline.tar.gz"
+  fi
+
+  return 1
 }
 
 verify_offline_packages() {
@@ -271,14 +310,7 @@ verify_offline_packages() {
   verify_file_exists "$CNI_FILE" "$CNI_PACKAGE" || missing=1
   verify_file_exists "$K8S_DEBS_FILE" "kubernetes-${K8S_VERSION}-debs.tar.gz" || missing=1
   verify_file_exists "$CALICO_FILE" "$CALICO_PACKAGE" || missing=1
-  if [ -f "$IMAGES_FILE" ]; then
-    ok "images-${K8S_VERSION}.tar"
-  elif [ -f "$IMAGES_BUNDLE_FILE" ]; then
-    ok "k8s-${K8S_VERSION}-offline.tar.gz"
-  else
-    fail "Image archive not found: images-${K8S_VERSION}.tar or k8s-${K8S_VERSION}-offline.tar.gz"
-    missing=1
-  fi
+  verify_image_archive_exists || missing=1
 
   echo
 
@@ -494,6 +526,7 @@ show_runtime_summary() {
   echo "Kubernetes Version : ${K8S_VERSION:-not selected}"
   echo "Install Mode       : ${INSTALL_MODE:-not selected}"
   echo "Package Directory  : ${PACKAGE_DIR:-not selected}"
+  echo "Pause Image        : ${PAUSE_IMAGE:-not configured}"
   echo "Log File           : ${LOG_FILE}"
   line
   echo

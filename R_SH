@@ -111,18 +111,45 @@ select_installation_mode() {
 
 init_project_dirs() {
   mkdir -p "${SCRIPT_DIR}/logs"
-  mkdir -p "${SCRIPT_DIR}/packages/v1.34"
-  mkdir -p "${SCRIPT_DIR}/packages/v1.35"
+  mkdir -p "${SCRIPT_DIR}/packages"
+}
+
+extract_package_archive_if_needed() {
+  local archive_file="$1"
+  local target_dir="$2"
+  local title="$3"
+
+  if [ ! -f "$archive_file" ]; then
+    return 0
+  fi
+
+  if [ -d "$target_dir" ]; then
+    warn "$title already exists. Skipping extraction: $target_dir"
+    return 0
+  fi
+
+  info "Extracting $title from $archive_file"
+  tar -xzf "$archive_file" -C "$SCRIPT_DIR"
 }
 
 bootstrap_offline_archives() {
   local packages_archive="${SCRIPT_DIR}/rsh-packages.tar.gz"
+  local package34_archive="${SCRIPT_DIR}/package34.tar.gz"
+  local package35_archive="${SCRIPT_DIR}/package35.tar.gz"
   local image_bundle="${SCRIPT_DIR}/k8s-v1.34-offline.tar.gz"
   local image_bundle_target="${SCRIPT_DIR}/packages/v1.34/k8s-v1.34-offline.tar.gz"
 
   if [ -f "$packages_archive" ]; then
-    tar -xzf "$packages_archive" -C "$SCRIPT_DIR"
+    if [ -d "${SCRIPT_DIR}/packages/v1.34" ] || [ -d "${SCRIPT_DIR}/packages/v1.35" ]; then
+      warn "packages/v1.34 or packages/v1.35 already exists. Skipping extraction: $packages_archive"
+    else
+      info "Extracting offline packages from $packages_archive"
+      tar -xzf "$packages_archive" -C "$SCRIPT_DIR"
+    fi
   fi
+
+  extract_package_archive_if_needed "$package34_archive" "${SCRIPT_DIR}/packages/v1.34" "packages/v1.34"
+  extract_package_archive_if_needed "$package35_archive" "${SCRIPT_DIR}/packages/v1.35" "packages/v1.35"
 
   if [ -f "$image_bundle" ]; then
     mkdir -p "${SCRIPT_DIR}/packages/v1.34"
@@ -252,6 +279,6 @@ main_menu() {
 # Start
 # ============================================================
 
-init_project_dirs
 bootstrap_offline_archives
+init_project_dirs
 main_menu

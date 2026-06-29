@@ -158,12 +158,15 @@ configure_containerd() {
   containerd config default > /etc/containerd/config.toml
 
   sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+  sed -i -E "s#sandbox = 'registry\.k8s\.io/pause:[^']+'#sandbox = '${PAUSE_IMAGE}'#g" /etc/containerd/config.toml
+  sed -i -E "s#sandbox_image = \"registry\.k8s\.io/pause:[^\"]+\"#sandbox_image = \"${PAUSE_IMAGE}\"#g" /etc/containerd/config.toml
 
   systemctl daemon-reload
   systemctl enable --now containerd
   systemctl restart containerd
+  systemctl restart kubelet || true
 
-  ok "containerd configured with SystemdCgroup=true"
+  ok "containerd configured with SystemdCgroup=true and pause image ${PAUSE_IMAGE}"
 }
 
 install_containerd_runtime() {
@@ -267,18 +270,39 @@ import_kubernetes_images() {
       return 0
     fi
 
-    if [ -f "$IMAGES_BUNDLE_FILE" ]; then
-      info "Importing image bundle archive: $IMAGES_BUNDLE_FILE"
+    local image_bundle_file=""
+
+    case "$K8S_VERSION" in
+      v1.34)
+        if [ -f "$IMAGES_BUNDLE_FILE" ]; then
+          image_bundle_file="$IMAGES_BUNDLE_FILE"
+        fi
+        ;;
+      v1.35)
+        if [ -f "$K8S_IMAGES_BUNDLE_FILE" ]; then
+          image_bundle_file="$K8S_IMAGES_BUNDLE_FILE"
+        elif [ -f "$IMAGES_BUNDLE_FILE" ]; then
+          image_bundle_file="$IMAGES_BUNDLE_FILE"
+        fi
+        ;;
+      *)
+        fail "Unsupported Kubernetes version for image import: $K8S_VERSION"
+        return 1
+        ;;
+    esac
+
+    if [ -n "$image_bundle_file" ]; then
+      info "Importing image bundle archive: $image_bundle_file"
 
       local tmp_images_dir="/tmp/r_sh-images-${K8S_VERSION}"
 
       rm -rf "$tmp_images_dir"
       mkdir -p "$tmp_images_dir"
 
-      tar -xzf "$IMAGES_BUNDLE_FILE" -C "$tmp_images_dir"
+      tar -xzf "$image_bundle_file" -C "$tmp_images_dir"
 
       if ! ls "$tmp_images_dir"/*.tar >/dev/null 2>&1; then
-        fail "No .tar image files found inside $IMAGES_BUNDLE_FILE"
+        fail "No .tar image files found inside $image_bundle_file"
         return 1
       fi
 
@@ -287,19 +311,41 @@ import_kubernetes_images() {
         ctr -n k8s.io images import "$image_tar"
       done
 
-      ok "All images imported from $IMAGES_BUNDLE_FILE"
+      ok "All images imported from $image_bundle_file"
       return 0
     fi
 
     fail "Offline mode: no image archive found."
     echo "Expected one of:"
     echo "$IMAGES_FILE"
-    echo "$IMAGES_BUNDLE_FILE"
+    if [ "$K8S_VERSION" = "v1.35" ]; then
+      echo "$K8S_IMAGES_BUNDLE_FILE"
+      echo "$IMAGES_BUNDLE_FILE"
+    else
+      echo "$IMAGES_BUNDLE_FILE"
+    fi
     return 1
 
   else
     info "Online mode: skipping local image import."
   fi
+}
+
+verify_pause_image_available() {
+  if ! is_offline_mode; then
+    return 0
+  fi
+
+  info "Checking pause image in containerd: ${PAUSE_IMAGE}"
+
+  if ctr -n k8s.io images ls | grep -Eq "^${PAUSE_IMAGE//./\\.}([[:space:]]|$)"; then
+    ok "Pause image found: ${PAUSE_IMAGE}"
+    return 0
+  fi
+
+  fail "Pause image not found in offline image bundle."
+  echo "Expected: ${PAUSE_IMAGE}"
+  return 1
 }
 
 # ============================================================
@@ -347,6 +393,7 @@ prepare_node_common() {
   run_step "Install containerd" install_containerd_runtime
   run_step "Install Kubernetes tools" install_kubernetes_tools
   run_step "Import Kubernetes images" import_kubernetes_images
+  run_step "Verify pause image" verify_pause_image_available
 }
 
 # ============================================================
