@@ -267,6 +267,7 @@ import_kubernetes_images() {
       info "Importing single image archive: $IMAGES_FILE"
       ctr -n k8s.io images import "$IMAGES_FILE"
       ok "Images imported from $IMAGES_FILE"
+      print_available_pause_images
       return 0
     fi
 
@@ -312,6 +313,7 @@ import_kubernetes_images() {
       done
 
       ok "All images imported from $image_bundle_file"
+      print_available_pause_images
       return 0
     fi
 
@@ -331,20 +333,34 @@ import_kubernetes_images() {
   fi
 }
 
-verify_pause_image_available() {
+image_exists_in_containerd() {
+  local image="$1"
+
+  ctr -n k8s.io images ls -q 2>/dev/null | awk -v img="$image" '$0 == img { found=1 } END { exit !found }'
+}
+
+print_available_pause_images() {
+  ctr -n k8s.io images ls -q 2>/dev/null | grep 'registry.k8s.io/pause:' || true
+}
+
+verify_pause_image() {
   if ! is_offline_mode; then
     return 0
   fi
 
   info "Checking pause image in containerd: ${PAUSE_IMAGE}"
 
-  if ctr -n k8s.io images ls | grep -Eq "^${PAUSE_IMAGE//./\\.}([[:space:]]|$)"; then
+  if image_exists_in_containerd "$PAUSE_IMAGE"; then
     ok "Pause image found: ${PAUSE_IMAGE}"
     return 0
   fi
 
-  fail "Pause image not found in offline image bundle."
-  echo "Expected: ${PAUSE_IMAGE}"
+  warn "Pause image was not found with exact match."
+  warn "Expected: ${PAUSE_IMAGE}"
+  warn "Available pause images:"
+  print_available_pause_images
+
+  fail "Pause image not found in containerd namespace k8s.io."
   return 1
 }
 
@@ -393,7 +409,7 @@ prepare_node_common() {
   run_step "Install containerd" install_containerd_runtime
   run_step "Install Kubernetes tools" install_kubernetes_tools
   run_step "Import Kubernetes images" import_kubernetes_images
-  run_step "Verify pause image" verify_pause_image_available
+  run_step "Verify pause image" verify_pause_image
 }
 
 # ============================================================
