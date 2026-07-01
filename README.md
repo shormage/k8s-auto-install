@@ -1,4 +1,5 @@
-How to Run
+How to Run V2
+
 download package34.tar.gz and package34.tar.gz
 
 chmod +x R_SH
